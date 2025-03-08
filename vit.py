@@ -124,7 +124,7 @@ class ViT(nn.Module):
         return self.classifier(x)
 
 # 10. Évaluation
-def evaluate(model, testloader):
+def evaluate(model, testloader, device, do_print=False):
     model.eval()
     correct = 0
     total = 0
@@ -135,7 +135,9 @@ def evaluate(model, testloader):
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-    print(f'Accuracy: {100 * correct / total:.2f}%')
+    if do_print:
+        print(f'Accuracy: {100 * correct / total:.2f}%')
+    return 100 * correct / total
     
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -205,12 +207,9 @@ def train(model, trainloader, testloader, criterion, optimizer, scheduler, epoch
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
-            if i % 100 == 99:  # Print every 100 mini-batches
-                print(f"Epoch [{epoch + 1}/{epochs}], Step [{i + 1}/{len(trainloader)}], Loss: {running_loss / 100:.4f}")
-                running_loss = 0.0
         scheduler.step()
-        print(f"Epoch {epoch + 1}/{epochs} completed.")
+        acc = evaluate(model, testloader, device)
+        print(f"Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}, Accuracy: {acc:.2f}%")
 
 def validate(model, dataloader, device):
     """Validation loop."""
@@ -308,10 +307,22 @@ def main():
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True, num_workers=4)
     testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
     testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False, num_workers=4)
+    
+    # Learning rate settings
+    print("-----------------------------")
+    print("What learning rate do you want the scheduler to start with?")
+    print("-----------------------------")
+    print("> ", end="")
+    lr = None
+    while lr is None:
+        try:
+            lr = float(input())
+        except ValueError:
+            print("Please enter a valid floating-point number.")
 
     # Loss function, optimizer, and scheduler
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(trainloader), epochs=epochs)
 
     # Training loop
